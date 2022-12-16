@@ -1,0 +1,108 @@
+## Задание 6.2.
+
+## Начало - указываем рабочую директорию 
+setwd ("C:/DSM/Control_Meshalkina")
+
+#очистим полностью память (удаление объектов из указанной среды)
+rm(list=ls())
+
+## подключаем необходимые пакеты
+library(sp)
+library(rgdal)
+library(maptools)
+library(gstat)
+library(rgeos)
+library(MASS)
+library(raster)
+
+## считываем данные из текстового файла с расширением txt,
+alldate <- read.table("Dano_zad_6.2.txt", header = TRUE)
+dim(alldate)
+summary(alldate)
+
+## Выведем только одну переменную
+alldate$Pb
+summary(alldate$Pb)
+
+
+
+##приписываем первым двум столбцам, что это координаты
+coordinates(alldate) <- ~X+Y ## меняет класс объекта, теперь  X Y пространственные координаты, а не линейные
+
+## Узнаем тип объекта
+class(alldate) ## пространственный объект
+
+# команда для выравнивания позиции графика, если он сбился в бок
+par(mfrow=c(1,1))
+
+plot(alldate)  ## нарисовал схему пробоотбора (в контурах участка пробоотбора)
+spplot(alldate) ## покрасил на 5 промежутках в процентном отношении
+spplot(alldate, main = "Свойство Pg") ## Добавили на график заголовок
+
+summary(alldate$X)
+summary(alldate$Y)
+
+## отрисовали график со всеми параметрами вместе, 
+## убрали легенду в правый верхний угол за границы осей
+spplot(alldate, zcol = "Pb", xlim = c(541909.6,578551.2), ylim = c(4931339.8,4986028.7),
+       cex = 0.5, main = "Свойство Pb [ppm]",
+       key.space = list(x = 1, y = 0.98, corner = c(0,1)),
+       scales=list(draw=TRUE))
+
+# spplot(geul, sp.layout = list("sp.polygons", studarea))
+## отрисовали график с границами интересующего нас участка
+## команда list создала последовательность из векторов с данными и с границами территории
+# spplot(geul,sp.layout = list("sp.polygons", studarea, col="tomato1", lwd=2))
+## поменяли цвет и толщину линии границы участка
+  
+mask1 <- readGDAL("6_mask_Belorech.txt") 
+plot(mask1) # проверяем, что получилось
+
+# переводим растр в формат маски
+mask <- as(mask1, 'SpatialGridDataFrame')
+plot(mask) # проверяем, что получилось
+summary(mask)
+
+spplot(alldate, sp.layout = list("sp.polygons", mask))
+## отрисовали график с границами интересующего нас участка
+## команда list создала последовательность из векторов с данными и с границами территории
+## поменяли настройки графика
+spplot(alldate,sp.layout = list("sp.polygons", mask, col="lightgreen", lwd=2),
+       main = "Свойство Pb",
+       key.space = list(x = 1, y = 0.98, corner = c(0,1)),
+       scales=list(draw=TRUE))
+
+## Работа с пакетом gstat
+
+gPb = gstat(formula = Pb~1, data = alldate)
+
+## рассчитываем и нарисуем экспериментальную семивариограмму
+vgPb <- variogram(gPb)
+plot(vgPb)
+
+#Зададим длину вариограммы и длину шага 
+vgPb <- variogram(gPb, cutoff=49000)
+plot(vgPb, pch = 19, cex=1)
+
+## смотрим, что содержит gPb
+gPb
+
+## рассчитываем и рисуем вариограмное облако
+vgmPb= variogram(gPb, cloud=TRUE)
+plot (vgmPb)
+vgmPb
+
+## Интерполяция методом обратных расстояний, 
+bel.idw <- krige(formula = Pb~1, locations = alldate, newdata = mask)
+
+## смотрим сколько и каких переменных содержит и рисуем
+names(bel.idw)
+summary(bel.idw)
+spplot(bel.idw)
+
+## воспользуемся параметром zcol для того,
+## чтобы на картограмме была только одна нужная переменная
+spplot(bel.idw, zcol = "var1.pred")
+
+
+
